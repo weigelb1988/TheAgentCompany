@@ -1,0 +1,58 @@
+# Configuration for LangGraph Agent Evaluation on TheAgentCompany
+#
+# This file configures the LLMs used by:
+# 1. Agent LLM - Powers the LangGraph agent (vLLM)
+# 2. Environment LLM - Powers NPCs and LLM-based evaluators (cloud or vLLM)
+
+[agent]
+# Agent LLM Configuration (vLLM)
+# This is the model that runs the agent itself
+base_url = "http://localhost:8000/v1"
+api_key = "your-vllm-api-key"
+model = "Qwen/Qwen2.5-72B-Instruct-AWQ"
+temperature = 0.7
+max_tokens = 2000
+timeout = 120
+
+[environment]
+# Environment LLM Configuration
+# This model powers:
+# - NPCs in conversational tasks
+# - LLM-based evaluators for subjective grading
+#
+# Options:
+# 1. Use the same vLLM server as agent (cost-effective)
+# 2. Use a cloud provider (OpenAI, Anthropic) for better quality
+
+# Option 1: Use vLLM (same as agent)
+base_url = "http://localhost:8000/v1"
+api_key = "your-vllm-api-key"
+model = "Qwen/Qwen2.5-72B-Instruct-AWQ"
+
+# Option 2: Use OpenAI
+# base_url = "https://api.openai.com/v1"
+# api_key = "sk-..."
+# model = "gpt-4o"
+
+# Option 3: Use Anthropic
+# base_url = "https://api.anthropic.com"
+# api_key = "sk-ant-..."
+# model = "claude-3-5-sonnet-20241022"
+
+[evaluation]
+# Evaluation settings
+max_iterations = 100
+server_hostname = "localhost"
+output_dir = "./outputs"
+cleanup_containers = true
+
+# Service URLs (default uses localhost with standard ports)
+gitlab_url = "http://localhost:8929"
+rocketchat_url = "http://localhost:3000"
+owncloud_url = "http://localhost:8092"
+plane_url = "http://localhost:8091"
+
+[logging]
+log_level = "INFO"
+enable_trajectory_logging = true
+save_screenshots = false
