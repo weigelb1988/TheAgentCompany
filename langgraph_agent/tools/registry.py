@@ -4,6 +4,10 @@ Tool registry for managing and executing tools.
 
 from typing import Dict, Any, Optional
 from .bash import execute_bash
+from .gitlab import GitLabClient
+from .rocketchat import RocketChatClient
+from .owncloud import OwnCloudClient
+from .plane import PlaneClient
 
 
 class ToolRegistry:
@@ -14,14 +18,70 @@ class ToolRegistry:
     for the execution node.
     """
 
-    def __init__(self, container_name: Optional[str] = None):
+    def __init__(
+        self,
+        container_name: Optional[str] = None,
+        service_credentials: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize the tool registry.
 
         Args:
             container_name: Docker container name for bash execution
+            service_credentials: Credentials for API services
         """
         self.container_name = container_name
+        self.service_credentials = service_credentials or {}
+
+        # Initialize API clients (lazy initialization)
+        self._gitlab: Optional[GitLabClient] = None
+        self._rocketchat: Optional[RocketChatClient] = None
+        self._owncloud: Optional[OwnCloudClient] = None
+        self._plane: Optional[PlaneClient] = None
+
+    def _get_gitlab(self) -> GitLabClient:
+        """Get or create GitLab client."""
+        if not self._gitlab:
+            creds = self.service_credentials.get("gitlab", {})
+            self._gitlab = GitLabClient(
+                base_url=creds.get("url", "http://localhost:8929"),
+                username=creds.get("username", "root"),
+                password=creds.get("password", "theagentcompany"),
+            )
+        return self._gitlab
+
+    def _get_rocketchat(self) -> RocketChatClient:
+        """Get or create RocketChat client."""
+        if not self._rocketchat:
+            creds = self.service_credentials.get("rocketchat", {})
+            self._rocketchat = RocketChatClient(
+                base_url=creds.get("url", "http://localhost:3000"),
+                username=creds.get("username", "theagentcompany"),
+                password=creds.get("password", "theagentcompany"),
+            )
+        return self._rocketchat
+
+    def _get_owncloud(self) -> OwnCloudClient:
+        """Get or create ownCloud client."""
+        if not self._owncloud:
+            creds = self.service_credentials.get("owncloud", {})
+            self._owncloud = OwnCloudClient(
+                base_url=creds.get("url", "http://localhost:8092"),
+                username=creds.get("username", "theagentcompany"),
+                password=creds.get("password", "theagentcompany"),
+            )
+        return self._owncloud
+
+    def _get_plane(self) -> PlaneClient:
+        """Get or create Plane client."""
+        if not self._plane:
+            creds = self.service_credentials.get("plane", {})
+            self._plane = PlaneClient(
+                base_url=creds.get("url", "http://localhost:8091"),
+                email=creds.get("email", "agent@company.com"),
+                password=creds.get("password", "theagentcompany"),
+            )
+        return self._plane
 
     async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -36,10 +96,39 @@ class ToolRegistry:
         """
         # Map tool names to implementations
         tool_map = {
+            # Basic tools
             "bash": self._call_bash,
             "file_read": self._call_file_read,
             "file_write": self._call_file_write,
-            # More tools will be added in Phase 4
+            # GitLab tools
+            "gitlab_list_projects": self._gitlab_list_projects,
+            "gitlab_get_file": self._gitlab_get_file,
+            "gitlab_create_file": self._gitlab_create_file,
+            "gitlab_update_file": self._gitlab_update_file,
+            "gitlab_list_issues": self._gitlab_list_issues,
+            "gitlab_create_issue": self._gitlab_create_issue,
+            "gitlab_update_issue": self._gitlab_update_issue,
+            "gitlab_list_merge_requests": self._gitlab_list_merge_requests,
+            "gitlab_create_merge_request": self._gitlab_create_merge_request,
+            # RocketChat tools
+            "rocketchat_list_channels": self._rocketchat_list_channels,
+            "rocketchat_get_history": self._rocketchat_get_history,
+            "rocketchat_send_message": self._rocketchat_send_message,
+            "rocketchat_list_dms": self._rocketchat_list_dms,
+            "rocketchat_create_dm": self._rocketchat_create_dm,
+            # ownCloud tools
+            "owncloud_list_folder": self._owncloud_list_folder,
+            "owncloud_get_file": self._owncloud_get_file,
+            "owncloud_upload_file": self._owncloud_upload_file,
+            "owncloud_create_folder": self._owncloud_create_folder,
+            "owncloud_delete": self._owncloud_delete,
+            "owncloud_create_share": self._owncloud_create_share,
+            # Plane tools
+            "plane_list_projects": self._plane_list_projects,
+            "plane_list_issues": self._plane_list_issues,
+            "plane_create_issue": self._plane_create_issue,
+            "plane_update_issue": self._plane_update_issue,
+            "plane_list_states": self._plane_list_states,
         }
 
         handler = tool_map.get(tool_name)
@@ -60,6 +149,8 @@ class ToolRegistry:
                 "error": f"Tool execution failed: {str(e)}",
                 "tool_name": tool_name,
             }
+
+    # ==================== Basic Tools ====================
 
     async def _call_bash(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute bash command."""
@@ -83,7 +174,6 @@ class ToolRegistry:
         """Read a file."""
         file_path = params.get("file_path", "")
 
-        # Use bash to read file
         result = await execute_bash(
             command=f"cat {file_path}",
             container_name=self.container_name,
@@ -107,7 +197,6 @@ class ToolRegistry:
         file_path = params.get("file_path", "")
         content = params.get("content", "")
 
-        # Use bash heredoc to write file
         escaped_content = content.replace("'", "'\"'\"'")
         command = f"cat > {file_path} << 'EOF'\n{escaped_content}\nEOF"
 
@@ -121,3 +210,244 @@ class ToolRegistry:
             "file_path": file_path,
             "error": result["stderr"] if not result["success"] else None,
         }
+
+    # ==================== GitLab Tools ====================
+
+    async def _gitlab_list_projects(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List GitLab projects."""
+        client = self._get_gitlab()
+        projects = await client.list_projects()
+        return {
+            "success": True,
+            "projects": projects[:10],  # Limit to avoid token overflow
+            "count": len(projects),
+        }
+
+    async def _gitlab_get_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get file from GitLab repository."""
+        client = self._get_gitlab()
+        project_id = params.get("project_id")
+        file_path = params.get("file_path")
+        ref = params.get("ref", "main")
+
+        content = await client.get_file_raw(project_id, file_path, ref)
+        return {"success": True, "content": content, "file_path": file_path}
+
+    async def _gitlab_create_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create file in GitLab repository."""
+        client = self._get_gitlab()
+        result = await client.create_file(
+            project_id=params.get("project_id"),
+            file_path=params.get("file_path"),
+            content=params.get("content"),
+            commit_message=params.get("commit_message", "Create file"),
+            branch=params.get("branch", "main"),
+        )
+        return {"success": True, "file": result}
+
+    async def _gitlab_update_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Update file in GitLab repository."""
+        client = self._get_gitlab()
+        result = await client.update_file(
+            project_id=params.get("project_id"),
+            file_path=params.get("file_path"),
+            content=params.get("content"),
+            commit_message=params.get("commit_message", "Update file"),
+            branch=params.get("branch", "main"),
+        )
+        return {"success": True, "file": result}
+
+    async def _gitlab_list_issues(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List GitLab issues."""
+        client = self._get_gitlab()
+        issues = await client.list_issues(
+            project_id=params.get("project_id"), state=params.get("state")
+        )
+        return {"success": True, "issues": issues[:20], "count": len(issues)}
+
+    async def _gitlab_create_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create GitLab issue."""
+        client = self._get_gitlab()
+        issue = await client.create_issue(
+            project_id=params.get("project_id"),
+            title=params.get("title"),
+            description=params.get("description"),
+            labels=params.get("labels"),
+        )
+        return {"success": True, "issue": issue}
+
+    async def _gitlab_update_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Update GitLab issue."""
+        client = self._get_gitlab()
+        issue = await client.update_issue(
+            project_id=params.get("project_id"),
+            issue_iid=params.get("issue_iid"),
+            title=params.get("title"),
+            description=params.get("description"),
+            state_event=params.get("state_event"),
+        )
+        return {"success": True, "issue": issue}
+
+    async def _gitlab_list_merge_requests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List GitLab merge requests."""
+        client = self._get_gitlab()
+        mrs = await client.list_merge_requests(
+            project_id=params.get("project_id"), state=params.get("state")
+        )
+        return {"success": True, "merge_requests": mrs[:20], "count": len(mrs)}
+
+    async def _gitlab_create_merge_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create GitLab merge request."""
+        client = self._get_gitlab()
+        mr = await client.create_merge_request(
+            project_id=params.get("project_id"),
+            source_branch=params.get("source_branch"),
+            target_branch=params.get("target_branch"),
+            title=params.get("title"),
+            description=params.get("description"),
+        )
+        return {"success": True, "merge_request": mr}
+
+    # ==================== RocketChat Tools ====================
+
+    async def _rocketchat_list_channels(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List RocketChat channels."""
+        client = self._get_rocketchat()
+        channels = await client.list_channels()
+        return {"success": True, "channels": channels, "count": len(channels)}
+
+    async def _rocketchat_get_history(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get RocketChat channel history."""
+        client = self._get_rocketchat()
+        room_id = params.get("room_id")
+        count = params.get("count", 50)
+
+        history = await client.get_channel_history(room_id, count)
+        return {"success": True, "messages": history, "count": len(history)}
+
+    async def _rocketchat_send_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Send RocketChat message."""
+        client = self._get_rocketchat()
+        result = await client.send_message(
+            room_id=params.get("room_id"), text=params.get("text")
+        )
+        return {"success": True, "message": result}
+
+    async def _rocketchat_list_dms(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List RocketChat direct messages."""
+        client = self._get_rocketchat()
+        dms = await client.list_direct_messages()
+        return {"success": True, "direct_messages": dms, "count": len(dms)}
+
+    async def _rocketchat_create_dm(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create RocketChat direct message."""
+        client = self._get_rocketchat()
+        dm = await client.create_direct_message(username=params.get("username"))
+        return {"success": True, "direct_message": dm}
+
+    # ==================== ownCloud Tools ====================
+
+    async def _owncloud_list_folder(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List ownCloud folder contents."""
+        client = self._get_owncloud()
+        path = params.get("path", "/")
+        items = await client.list_folder(path)
+        return {"success": True, "items": items, "count": len(items)}
+
+    async def _owncloud_get_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get file from ownCloud."""
+        client = self._get_owncloud()
+        path = params.get("path")
+        content = await client.get_file_text(path)
+        return {"success": True, "content": content, "path": path}
+
+    async def _owncloud_upload_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Upload file to ownCloud."""
+        client = self._get_owncloud()
+        result = await client.upload_file_text(
+            path=params.get("path"), content=params.get("content")
+        )
+        return result
+
+    async def _owncloud_create_folder(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create ownCloud folder."""
+        client = self._get_owncloud()
+        result = await client.create_folder(path=params.get("path"))
+        return result
+
+    async def _owncloud_delete(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Delete ownCloud file/folder."""
+        client = self._get_owncloud()
+        result = await client.delete(path=params.get("path"))
+        return result
+
+    async def _owncloud_create_share(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create ownCloud share link."""
+        client = self._get_owncloud()
+        url = await client.get_share_link(
+            path=params.get("path"), password=params.get("password")
+        )
+        return {"success": True, "share_url": url}
+
+    # ==================== Plane Tools ====================
+
+    async def _plane_list_projects(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List Plane projects."""
+        client = self._get_plane()
+        workspace_slug = params.get("workspace_slug")
+        projects = await client.list_projects(workspace_slug)
+        return {"success": True, "projects": projects, "count": len(projects)}
+
+    async def _plane_list_issues(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List Plane issues."""
+        client = self._get_plane()
+        issues = await client.list_issues(
+            project_id=params.get("project_id"),
+            workspace_slug=params.get("workspace_slug"),
+            state=params.get("state"),
+        )
+        return {"success": True, "issues": issues[:20], "count": len(issues)}
+
+    async def _plane_create_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create Plane issue."""
+        client = self._get_plane()
+        issue = await client.create_issue(
+            project_id=params.get("project_id"),
+            name=params.get("name"),
+            description=params.get("description"),
+            workspace_slug=params.get("workspace_slug"),
+            priority=params.get("priority"),
+        )
+        return {"success": True, "issue": issue}
+
+    async def _plane_update_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Update Plane issue."""
+        client = self._get_plane()
+        issue = await client.update_issue(
+            project_id=params.get("project_id"),
+            issue_id=params.get("issue_id"),
+            name=params.get("name"),
+            description=params.get("description"),
+            state_id=params.get("state_id"),
+            workspace_slug=params.get("workspace_slug"),
+        )
+        return {"success": True, "issue": issue}
+
+    async def _plane_list_states(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List Plane issue states."""
+        client = self._get_plane()
+        states = await client.list_states(
+            project_id=params.get("project_id"), workspace_slug=params.get("workspace_slug")
+        )
+        return {"success": True, "states": states, "count": len(states)}
+
+    async def cleanup(self):
+        """Cleanup API clients."""
+        if self._gitlab:
+            await self._gitlab.close()
+        if self._rocketchat:
+            await self._rocketchat.close()
+        if self._owncloud:
+            await self._owncloud.close()
+        if self._plane:
+            await self._plane.close()
