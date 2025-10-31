@@ -100,7 +100,7 @@ class ToolRegistry:
             "bash": self._call_bash,
             "file_read": self._call_file_read,
             "file_write": self._call_file_write,
-            # GitLab tools
+            # GitLab tools (low-level)
             "gitlab_list_projects": self._gitlab_list_projects,
             "gitlab_get_file": self._gitlab_get_file,
             "gitlab_create_file": self._gitlab_create_file,
@@ -110,12 +110,19 @@ class ToolRegistry:
             "gitlab_update_issue": self._gitlab_update_issue,
             "gitlab_list_merge_requests": self._gitlab_list_merge_requests,
             "gitlab_create_merge_request": self._gitlab_create_merge_request,
-            # RocketChat tools
+            # GitLab convenience tools (high-level, recommended)
+            "gitlab_get_file_by_name": self._gitlab_get_file_by_name,
+            "gitlab_create_issue_by_name": self._gitlab_create_issue_by_name,
+            # RocketChat tools (low-level)
             "rocketchat_list_channels": self._rocketchat_list_channels,
             "rocketchat_get_history": self._rocketchat_get_history,
             "rocketchat_send_message": self._rocketchat_send_message,
             "rocketchat_list_dms": self._rocketchat_list_dms,
             "rocketchat_create_dm": self._rocketchat_create_dm,
+            # RocketChat convenience tools (high-level, recommended)
+            "rocketchat_send_dm_to_user": self._rocketchat_send_dm_to_user,
+            "rocketchat_send_to_channel": self._rocketchat_send_to_channel,
+            "rocketchat_get_channel_history_by_name": self._rocketchat_get_channel_history_by_name,
             # ownCloud tools
             "owncloud_list_folder": self._owncloud_list_folder,
             "owncloud_get_file": self._owncloud_get_file,
@@ -123,12 +130,14 @@ class ToolRegistry:
             "owncloud_create_folder": self._owncloud_create_folder,
             "owncloud_delete": self._owncloud_delete,
             "owncloud_create_share": self._owncloud_create_share,
-            # Plane tools
+            # Plane tools (low-level)
             "plane_list_projects": self._plane_list_projects,
             "plane_list_issues": self._plane_list_issues,
             "plane_create_issue": self._plane_create_issue,
             "plane_update_issue": self._plane_update_issue,
             "plane_list_states": self._plane_list_states,
+            # Plane convenience tools (high-level, recommended)
+            "plane_create_issue_by_project_name": self._plane_create_issue_by_project_name,
         }
 
         handler = tool_map.get(tool_name)
@@ -308,6 +317,29 @@ class ToolRegistry:
         )
         return {"success": True, "merge_request": mr}
 
+    # GitLab Convenience Tools
+
+    async def _gitlab_get_file_by_name(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get file from GitLab by project name (convenience method)."""
+        client = self._get_gitlab()
+        content = await client.get_file_by_project_name(
+            project_name=params.get("project_name"),
+            file_path=params.get("file_path"),
+            ref=params.get("ref", "main"),
+        )
+        return {"success": True, "content": content, "file_path": params.get("file_path")}
+
+    async def _gitlab_create_issue_by_name(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create GitLab issue by project name (convenience method)."""
+        client = self._get_gitlab()
+        issue = await client.create_issue_by_project_name(
+            project_name=params.get("project_name"),
+            title=params.get("title"),
+            description=params.get("description"),
+            labels=params.get("labels"),
+        )
+        return {"success": True, "issue": issue}
+
     # ==================== RocketChat Tools ====================
 
     async def _rocketchat_list_channels(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -344,6 +376,35 @@ class ToolRegistry:
         client = self._get_rocketchat()
         dm = await client.create_direct_message(username=params.get("username"))
         return {"success": True, "direct_message": dm}
+
+    # RocketChat Convenience Tools
+
+    async def _rocketchat_send_dm_to_user(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Send direct message to user by username (convenience method)."""
+        client = self._get_rocketchat()
+        result = await client.send_direct_message_to_user(
+            username=params.get("username"),
+            text=params.get("text")
+        )
+        return {"success": True, "message": result}
+
+    async def _rocketchat_send_to_channel(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Send message to channel by name (convenience method)."""
+        client = self._get_rocketchat()
+        result = await client.send_message_to_room(
+            room_name=params.get("channel_name"),
+            text=params.get("text")
+        )
+        return {"success": True, "message": result}
+
+    async def _rocketchat_get_channel_history_by_name(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get channel history by name (convenience method)."""
+        client = self._get_rocketchat()
+        messages = await client.get_channel_history_by_name(
+            channel_name=params.get("channel_name"),
+            count=params.get("count", 50)
+        )
+        return {"success": True, "messages": messages, "count": len(messages)}
 
     # ==================== ownCloud Tools ====================
 
@@ -440,6 +501,22 @@ class ToolRegistry:
             project_id=params.get("project_id"), workspace_slug=params.get("workspace_slug")
         )
         return {"success": True, "states": states, "count": len(states)}
+
+    # Plane Convenience Tools
+
+    async def _plane_create_issue_by_project_name(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create Plane issue by project name (convenience method)."""
+        client = self._get_plane()
+        issue = await client.create_issue_by_project_name(
+            project_name=params.get("project_name"),
+            name=params.get("name"),
+            description=params.get("description"),
+            state_id=params.get("state_id"),
+            priority=params.get("priority"),
+            assignees=params.get("assignees"),
+            workspace_slug=params.get("workspace_slug"),
+        )
+        return {"success": True, "issue": issue}
 
     async def cleanup(self):
         """Cleanup API clients."""

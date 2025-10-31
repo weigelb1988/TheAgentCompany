@@ -625,6 +625,45 @@ class PlaneClient:
 
         return None
 
+    async def create_issue_by_project_name(
+        self,
+        project_name: str,
+        name: str,
+        description: Optional[str] = None,
+        state_id: Optional[str] = None,
+        priority: Optional[str] = None,
+        assignees: Optional[List[str]] = None,
+        workspace_slug: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create an issue by project name (convenience method).
+
+        Args:
+            project_name: Project name
+            name: Issue title
+            description: Issue description
+            state_id: State ID
+            priority: Priority (urgent, high, medium, low, none)
+            assignees: List of user IDs to assign
+            workspace_slug: Workspace slug
+
+        Returns:
+            Created issue object
+        """
+        project = await self.get_project_by_name(project_name, workspace_slug)
+        if not project:
+            raise ValueError(f"Project not found: {project_name}")
+
+        return await self.create_issue(
+            project_id=project["id"],
+            name=name,
+            description=description,
+            state_id=state_id,
+            priority=priority,
+            assignees=assignees,
+            workspace_slug=workspace_slug,
+        )
+
     async def close(self):
         """Close the HTTP client."""
         await self.client.aclose()

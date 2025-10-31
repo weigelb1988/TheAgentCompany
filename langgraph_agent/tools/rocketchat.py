@@ -571,6 +571,60 @@ class RocketChatClient:
         # Filter by username
         return [msg for msg in history if msg.get("u", {}).get("username") == username]
 
+    async def send_direct_message_to_user(
+        self, username: str, text: str
+    ) -> Dict[str, Any]:
+        """
+        Send a direct message to a user by username.
+
+        This is a convenience method that handles the DM room lookup/creation
+        automatically.
+
+        Args:
+            username: Username to send DM to
+            text: Message text
+
+        Returns:
+            Sent message object
+        """
+        # Try to find existing DM
+        dms = await self.list_direct_messages()
+        room_id = None
+
+        for dm in dms:
+            # Check if this DM is with the target user
+            usernames = dm.get("usernames", [])
+            if username in usernames:
+                room_id = dm["_id"]
+                break
+
+        # If no existing DM, create one
+        if not room_id:
+            dm = await self.create_direct_message(username)
+            room_id = dm["_id"]
+
+        # Send message
+        return await self.send_message(room_id, text)
+
+    async def get_channel_history_by_name(
+        self, channel_name: str, count: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get channel history by channel name.
+
+        Args:
+            channel_name: Channel name (without #)
+            count: Number of messages to retrieve
+
+        Returns:
+            List of message objects
+        """
+        room_id = await self.get_room_id(channel_name)
+        if not room_id:
+            raise ValueError(f"Channel not found: {channel_name}")
+
+        return await self.get_channel_history(room_id, count)
+
     async def close(self):
         """Close the HTTP client."""
         await self.client.aclose()

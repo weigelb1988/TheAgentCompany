@@ -633,6 +633,75 @@ class GitLabClient:
         response.raise_for_status()
         return response.json()
 
+    # ==================== Utility Methods ====================
+
+    async def get_project_by_name(self, project_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get project by name.
+
+        Args:
+            project_name: Project name or path (e.g., "root/my-project")
+
+        Returns:
+            Project object or None if not found
+        """
+        projects = await self.search_projects(project_name)
+
+        # Try exact match first
+        for project in projects:
+            if project["path_with_namespace"] == project_name or project["name"] == project_name:
+                return project
+
+        # Return first result if no exact match
+        return projects[0] if projects else None
+
+    async def get_file_by_project_name(
+        self, project_name: str, file_path: str, ref: str = "main"
+    ) -> str:
+        """
+        Get file from repository by project name.
+
+        This is a convenience method that looks up the project ID first.
+
+        Args:
+            project_name: Project name
+            file_path: Path to file in repository
+            ref: Branch or tag name
+
+        Returns:
+            Raw file contents as string
+        """
+        project = await self.get_project_by_name(project_name)
+        if not project:
+            raise ValueError(f"Project not found: {project_name}")
+
+        return await self.get_file_raw(project["id"], file_path, ref)
+
+    async def create_issue_by_project_name(
+        self,
+        project_name: str,
+        title: str,
+        description: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create issue by project name.
+
+        Args:
+            project_name: Project name
+            title: Issue title
+            description: Issue description
+            labels: Issue labels
+
+        Returns:
+            Created issue object
+        """
+        project = await self.get_project_by_name(project_name)
+        if not project:
+            raise ValueError(f"Project not found: {project_name}")
+
+        return await self.create_issue(project["id"], title, description, labels)
+
     async def close(self):
         """Close the HTTP client."""
         await self.client.aclose()
