@@ -8,6 +8,7 @@ from .gitlab import GitLabClient
 from .rocketchat import RocketChatClient
 from .owncloud import OwnCloudClient
 from .plane import PlaneClient
+from .browser import BrowserClient
 
 
 class ToolRegistry:
@@ -38,6 +39,7 @@ class ToolRegistry:
         self._rocketchat: Optional[RocketChatClient] = None
         self._owncloud: Optional[OwnCloudClient] = None
         self._plane: Optional[PlaneClient] = None
+        self._browser: Optional[BrowserClient] = None
 
     def _get_gitlab(self) -> GitLabClient:
         """Get or create GitLab client."""
@@ -82,6 +84,12 @@ class ToolRegistry:
                 password=creds.get("password", "theagentcompany"),
             )
         return self._plane
+
+    def _get_browser(self) -> BrowserClient:
+        """Get or create Browser client."""
+        if not self._browser:
+            self._browser = BrowserClient(headless=True)
+        return self._browser
 
     async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -138,6 +146,19 @@ class ToolRegistry:
             "plane_list_states": self._plane_list_states,
             # Plane convenience tools (high-level, recommended)
             "plane_create_issue_by_project_name": self._plane_create_issue_by_project_name,
+            # Browser tools
+            "browser_goto": self._browser_goto,
+            "browser_click": self._browser_click,
+            "browser_type": self._browser_type,
+            "browser_fill": self._browser_fill,
+            "browser_get_text": self._browser_get_text,
+            "browser_get_elements": self._browser_get_elements,
+            "browser_screenshot": self._browser_screenshot,
+            "browser_scroll": self._browser_scroll,
+            "browser_wait": self._browser_wait,
+            "browser_back": self._browser_back,
+            "browser_forward": self._browser_forward,
+            "browser_refresh": self._browser_refresh,
         }
 
         handler = tool_map.get(tool_name)
@@ -518,6 +539,109 @@ class ToolRegistry:
         )
         return {"success": True, "issue": issue}
 
+    # ==================== Browser Tools ====================
+
+    async def _browser_goto(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Navigate browser to URL."""
+        client = self._get_browser()
+        result = await client.goto(
+            url=params.get("url"),
+            wait_until=params.get("wait_until", "load")
+        )
+        return result
+
+    async def _browser_click(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Click an element in browser."""
+        client = self._get_browser()
+        result = await client.click(
+            selector=params.get("selector"),
+            timeout=params.get("timeout")
+        )
+        return result
+
+    async def _browser_type(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Type text into an element."""
+        client = self._get_browser()
+        result = await client.type_text(
+            selector=params.get("selector"),
+            text=params.get("text"),
+            delay=params.get("delay", 0),
+            timeout=params.get("timeout")
+        )
+        return result
+
+    async def _browser_fill(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Fill an input element (clears first)."""
+        client = self._get_browser()
+        result = await client.fill(
+            selector=params.get("selector"),
+            value=params.get("value"),
+            timeout=params.get("timeout")
+        )
+        return result
+
+    async def _browser_get_text(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get text content from element or page."""
+        client = self._get_browser()
+        text = await client.get_text(selector=params.get("selector"))
+        return {
+            "success": True,
+            "text": text,
+            "selector": params.get("selector")
+        }
+
+    async def _browser_get_elements(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get all elements matching selector."""
+        client = self._get_browser()
+        elements = await client.get_elements(selector=params.get("selector"))
+        return {
+            "success": True,
+            "elements": elements,
+            "count": len(elements)
+        }
+
+    async def _browser_screenshot(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Take a screenshot."""
+        client = self._get_browser()
+        result = await client.screenshot(
+            path=params.get("path"),
+            full_page=params.get("full_page", False)
+        )
+        return result
+
+    async def _browser_scroll(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Scroll the page."""
+        client = self._get_browser()
+        result = await client.scroll(
+            direction=params.get("direction", "down"),
+            amount=params.get("amount", 500)
+        )
+        return result
+
+    async def _browser_wait(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Wait for specified milliseconds."""
+        client = self._get_browser()
+        result = await client.wait(milliseconds=params.get("milliseconds", 1000))
+        return result
+
+    async def _browser_back(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Navigate back in browser history."""
+        client = self._get_browser()
+        result = await client.back()
+        return result
+
+    async def _browser_forward(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Navigate forward in browser history."""
+        client = self._get_browser()
+        result = await client.forward()
+        return result
+
+    async def _browser_refresh(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Refresh the current page."""
+        client = self._get_browser()
+        result = await client.refresh()
+        return result
+
     async def cleanup(self):
         """Cleanup API clients."""
         if self._gitlab:
@@ -528,3 +652,5 @@ class ToolRegistry:
             await self._owncloud.close()
         if self._plane:
             await self._plane.close()
+        if self._browser:
+            await self._browser.close()
