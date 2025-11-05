@@ -17,7 +17,7 @@ class AgentState(TypedDict):
     - Conversation history
     - Task information
     - Execution tracking
-    - Tool execution results
+    - Tool execution results with enhanced memory
     - Environment state
     - Trajectory for evaluation
     """
@@ -37,7 +37,10 @@ class AgentState(TypedDict):
 
     # Tool execution
     pending_actions: list[dict[str, Any]]
-    tool_results: list[dict[str, Any]]
+    tool_results: list[dict[str, Any]]  # Legacy: kept for backward compatibility
+
+    # Enhanced memory system - stores structured memory with indexing
+    memory: dict[str, Any]  # Serialized MemoryStore
 
     # Environment state
     current_directory: str
@@ -85,6 +88,7 @@ def create_initial_state(
         max_iterations=max_iterations,
         pending_actions=[],
         tool_results=[],
+        memory={"memories": [], "statistics": {}},  # Initialize empty memory
         current_directory="/workspace",
         browser_state={},
         service_credentials=service_credentials or {
